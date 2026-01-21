@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TUVN - Terminal Futurista de Instrumentación</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --neon-blue: #00d2ff;
+            --neon-red: #ff0055;
+            --neon-green: #39ff14;
+            --panel-bg: rgba(10, 15, 28, 0.85);
+        }
+        
+        body { 
+            font-family: 'Roboto', sans-serif; 
+            background-color: #05070a; 
+            color: #e2e8f0;
+            background-image: 
+                radial-gradient(circle at 50% 50%, #1e293b 0%, #05070a 100%),
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 30px 30px, 30px 30px;
+        }
+
+        .tech-font { font-family: 'Orbitron', sans-serif; }
+
+        /* Estilo Sci-Fi Card */
+        .scifi-panel {
+            background: var(--panel-bg);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 20px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+
+        .scifi-panel::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 4px;
+            background: linear-gradient(90deg, transparent, var(--border-color), transparent);
+            animation: pulse-glow 2s infinite;
+        }
+
+        .panel-blue { --border-color: var(--neon-blue); box-shadow: 0 0 15px rgba(0, 210, 255, 0.1); }
+        .panel-red { --border-color: var(--neon-red); box-shadow: 0 0 15px rgba(255, 0, 85, 0.1); }
+        .panel-master { --border-color: var(--neon-green); border: 1px solid rgba(57, 255, 20, 0.2); }
+
+        @keyframes pulse-glow {
+            0% { opacity: 0.3; }
+            50% { opacity: 1; }
+            100% { opacity: 0.3; }
+        }
+
+        .glass-inner {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .value-glow {
+            text-shadow: 0 0 10px var(--border-color);
+        }
+
+        /* Animación de fondo para el sensor maestro */
+        .scan-line {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, transparent 0%, rgba(57, 255, 20, 0.05) 50%, transparent 100%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            animation: scan 4s linear infinite;
+        }
+
+        @keyframes scan {
+            from { transform: translateY(-100%); }
+            to { transform: translateY(100%); }
+        }
+
+        canvas { max-height: 100px !important; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <header class="relative border-b border-blue-500/30 bg-black/60 backdrop-blur-md">
+        <div class="container mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center relative z-10">
+            <div class="flex items-center gap-4">
+                <div class="relative">
+                    <div class="absolute inset-0 bg-blue-500 blur-md opacity-20"></div>
+                    <div class="bg-slate-900 p-2 rounded-lg border border-blue-400/50 relative">
+                        <i data-lucide="shield-check" class="w-8 h-8 text-blue-400"></i>
+                    </div>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tighter tech-font text-blue-400">TUVN <span class="text-white">CORE</span></h1>
+                    <p class="text-[9px] text-blue-300/60 font-bold tracking-[0.4em] uppercase">Advanced Industrial Interface</p>
+                </div>
+            </div>
+
+            <div class="mt-4 md:mt-0 flex items-center gap-6 bg-slate-900/50 p-3 rounded-lg border border-white/5">
+                <div class="text-right">
+                    <p id="dateDisplay" class="text-[9px] uppercase tracking-tighter opacity-50"></p>
+                    <p id="timeDisplay" class="text-xl font-bold tech-font text-white">00:00:00</p>
+                </div>
+                <div class="flex flex-col items-center gap-1 border-l border-white/10 pl-4">
+                    <div id="staticDot" class="h-2 w-2 rounded-full bg-red-600 shadow-[0_0_8px_#ef4444]"></div>
+                    <span id="statusText" class="text-[9px] font-bold tech-font text-red-500">OFFLINE</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow container mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <script>
+                const sensors = [
+                    { id: 1, label: 'SECTOR ALPHA-1', color: 'blue' },
+                    { id: 2, label: 'SECTOR ALPHA-2', color: 'red' },
+                    { id: 3, label: 'SECTOR ALPHA-3', color: 'blue' },
+                    { id: 4, label: 'SECTOR ALPHA-4', color: 'red' }
+                ];
+
+                sensors.forEach(s => {
+                    document.write(`
+                        <div class="scifi-panel panel-${s.color} p-4 group hover:scale-[1.02] transition-transform">
+                            <div class="flex justify-between items-center mb-6">
+                                <div class="flex flex-col">
+                                    <span class="text-[10px] text-white/40 tech-font tracking-widest uppercase">Sensor Node</span>
+                                    <span class="tech-font text-xs font-bold text-white">${s.label}</span>
+                                </div>
+                                <div class="p-2 glass-inner">
+                                    <i data-lucide="activity" class="w-4 h-4 text-white/60"></i>
+                                </div>
+                            </div>
+                            <div class="text-center mb-6">
+                                <span id="val${s.id}" class="text-5xl font-black tech-font text-white value-glow">--</span>
+                                <span class="text-lg text-${s.color}-400/80 tech-font">°C</span>
+                            </div>
+                            <div class="glass-inner p-2">
+                                <canvas id="chart${s.id}"></canvas>
+                            </div>
+                        </div>
+                    `);
+                });
+            </script>
+        </div>
+
+        <div class="mt-8 grid grid-cols-1 gap-6">
+            <div class="scifi-panel panel-master p-6 bg-emerald-950/10 relative">
+                <div class="scan-line"></div>
+                <div class="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
+                    <div class="flex items-center gap-4">
+                        <div class="p-4 rounded-full bg-emerald-500/10 border border-emerald-500/30 animate-pulse">
+                            <i data-lucide="cpu" class="w-10 h-10 text-emerald-400"></i>
+                        </div>
+                        <div>
+                            <h2 class="tech-font text-xl font-bold text-emerald-400">TEMPERATURA PROMEDIO</h2>
+                            <p class="text-[10px] text-emerald-300/50 tracking-widest uppercase font-bold italic">Master System Summary</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-12">
+                        <div class="text-center">
+                            <span id="valAvg" class="text-7xl font-black tech-font text-emerald-400 value-glow" style="--border-color: var(--neon-green)">--</span>
+                            <span class="text-2xl text-emerald-300 tech-font">°C</span>
+                        </div>
+                        <div class="hidden md:block w-64 glass-inner p-3">
+                            <canvas id="chartAvg"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-12 flex flex-col items-center">
+            <button id="connectBtn" onclick="toggleConnection()" class="group relative px-10 py-4 bg-slate-900 text-white rounded-none overflow-hidden transition-all border border-blue-500/50 skew-x-[-15deg] hover:bg-blue-600/20">
+                <div class="relative flex items-center gap-3 tech-font font-bold skew-x-[15deg]">
+                    <i data-lucide="bluetooth-connected" class="w-5 h-5 text-blue-400"></i>
+                    <span class="tracking-[0.2em]">INICIAR PROTOCOLO</span>
+                </div>
+            </button>
+            <div class="mt-6 flex items-center gap-4 text-[9px] text-slate-500 tech-font uppercase tracking-widest">
+                <span class="flex items-center gap-1"><i data-lucide="users" class="w-3 h-3"></i> PILCO-VELASCO-TORO</span>
+                <span class="w-1 h-1 bg-slate-700 rounded-full"></span>
+                <span>DS18B20 OneWire Protocol</span>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-black/80 py-4 text-center border-t border-white/5 backdrop-blur-sm">
+        <p class="text-[10px] text-slate-600 tracking-[0.5em]">IST VIDA NUEVA • INDUSTRIAL SYSTEMS © 2026</p>
+    </footer>
+
+    <script>
+        lucide.createIcons();
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('dateDisplay').textContent = now.toLocaleDateString('es-ES', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+            document.getElementById('timeDisplay').textContent = now.toLocaleTimeString('es-ES', { hour12: false });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        const charts = {};
+        function initCharts() {
+            // Sensores individuales
+            sensors.forEach(s => {
+                const ctx = document.getElementById(`chart${s.id}`).getContext('2d');
+                charts[s.id] = createChart(ctx, s.color === 'blue' ? '#00d2ff' : '#ff0055');
+            });
+            // Sensor Maestro
+            const ctxAvg = document.getElementById('chartAvg').getContext('2d');
+            charts['Avg'] = createChart(ctxAvg, '#39ff14');
+        }
+
+        function createChart(ctx, color) {
+            return new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(20).fill(''),
+                    datasets: [{
+                        data: Array(20).fill(null),
+                        borderColor: color,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.4,
+                        fill: true,
+                        backgroundColor: (context) => {
+                            const gradient = context.chart.ctx.createLinearGradient(0, 0, 0, 100);
+                            gradient.addColorStop(0, color + '33');
+                            gradient.addColorStop(1, 'transparent');
+                            return gradient;
+                        }
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { 
+                            grid: { color: 'rgba(255,255,255,0.03)' },
+                            ticks: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+        initCharts();
+
+        function updateChartData(id, value) {
+            const chart = charts[id];
+            chart.data.datasets[0].data.push(value);
+            chart.data.datasets[0].data.shift();
+            chart.update('none');
+        }
+
+        const serviceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+        const characteristicUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+        let bluetoothDevice;
+
+        async function toggleConnection() {
+            if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+                bluetoothDevice.gatt.disconnect();
+            } else {
+                try {
+                    document.getElementById('connectBtn').innerText = "VINCULANDO...";
+                    bluetoothDevice = await navigator.bluetooth.requestDevice({
+                        filters: [{ name: 'TUVN_Termometros' }],
+                        optionalServices: [serviceUuid]
+                    });
+                    const server = await bluetoothDevice.gatt.connect();
+                    const service = await server.getPrimaryService(serviceUuid);
+                    const char = await service.getCharacteristic(characteristicUuid);
+                    
+                    await char.startNotifications();
+                    char.addEventListener('characteristicvaluechanged', (e) => {
+                        const decoder = new TextDecoder('utf-8');
+                        const data = JSON.parse(decoder.decode(e.target.value));
+                        
+                        let sum = 0;
+                        let count = 0;
+
+                        [1,2,3,4].forEach(i => {
+                            const val = data[`s${i}`];
+                            if(val !== undefined && val !== null) {
+                                document.getElementById(`val${i}`).innerText = val.toFixed(1);
+                                updateChartData(i, val);
+                                sum += val;
+                                count++;
+                            }
+                        });
+
+                        // Lógica de Promedio
+                        if(count > 0) {
+                            const average = sum / count;
+                            document.getElementById('valAvg').innerText = average.toFixed(1);
+                            updateChartData('Avg', average);
+                        }
+                        
+                        document.getElementById('staticDot').classList.add('animate-pulse');
+                        setTimeout(() => document.getElementById('staticDot').classList.remove('animate-pulse'), 500);
+                    });
+                    
+                    updateUI(true);
+                } catch (err) {
+                    console.error(err);
+                    updateUI(false);
+                }
+            }
+        }
+
+        function updateUI(connected) {
+            const btn = document.getElementById('connectBtn');
+            const status = document.getElementById('statusText');
+            const dot = document.getElementById('staticDot');
+            
+            if(connected) {
+                btn.innerHTML = '<span class="skew-x-[15deg]">TERMINAR SESIÓN</span>';
+                status.innerText = "ONLINE";
+                status.className = "text-[9px] font-bold tech-font text-emerald-400";
+                dot.className = "h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]";
+            } else {
+                btn.innerHTML = '<span class="skew-x-[15deg]">INICIAR PROTOCOLO</span>';
+                status.innerText = "OFFLINE";
+                status.className = "text-[9px] font-bold tech-font text-red-500";
+                dot.className = "h-2 w-2 rounded-full bg-red-600 shadow-[0_0_8px_#ef4444]";
+                [1,2,3,4].forEach(i => document.getElementById(`val${i}`).innerText = "--");
+                document.getElementById('valAvg').innerText = "--";
+            }
+        }
+    </script>
+</body>
+</html>
